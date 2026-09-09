@@ -57,7 +57,7 @@ enum settingsIndex {
 };
 
 #define NAME_MAX_SIZE 10
-#define VALUE_MAX_SIZE 30
+#define VALUE_MAX_SIZE 64
 
 class SettingsObject
 {
