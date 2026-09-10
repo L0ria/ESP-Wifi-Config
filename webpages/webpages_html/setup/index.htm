@@ -15,6 +15,7 @@
 		  <li><a href="javascript:void(0)" class="tablinks" onclick="openTab(event, 'Info')" id="defaultOpen">Info</a></li>
 		  <li><a href="javascript:void(0)" class="tablinks" onclick="openTab(event, 'Wifi')">Wifi</a></li>
 		  <li><a href="javascript:void(0)" class="tablinks" onclick="openTab(event, 'Security')">Security</a></li>
+		  <li>%%ESP_CUSTOM_TAB_LINK%%</li>
 		  <li><a href="javascript:void(0)" class="tablinks" onclick="openTab(event, 'Console')">Console</a></li>
 		</ul>
 		<div id="Info" class="tabcontent">
@@ -142,6 +143,7 @@
 					</table>
 			</form>
 		</div>
+		%%ESP_CUSTOM_TAB_BODY%%
 		<div id="Console" class="tabcontent">
 					<table class="tableall">
 					<tr>
@@ -241,6 +243,16 @@
 			document.getElementById("Port").innerHTML = mydata[0].Port;
 			document.getElementById("System").innerHTML = mydata[0].System;
 			document.getElementById("WEB_USER").value = mydata[0].WEB_USER;
+			// User-defined settings (Custom tab): fill each input from the data JSON
+			var customInputs = document.querySelectorAll("#Custom input[type=text]");
+			for (var ci = 0; ci < customInputs.length; ci++)
+			{
+				var cname = customInputs[ci].getAttribute("name");
+				if (mydata[0][cname] !== undefined)
+				{
+					customInputs[ci].value = mydata[0][cname];
+				}
+			}
 			readCout();
 		}
 		</script>
