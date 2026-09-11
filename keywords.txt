@@ -17,6 +17,10 @@ initialize	KEYWORD2
 print_settings	KEYWORD2
 goWild	KEYWORD2
 ESP_reset_settings	KEYWORD2
+addSetting	KEYWORD2
+getSetting	KEYWORD2
+saveAllSettings	KEYWORD2
+resetAllSettings	KEYWORD2
 
 #######################################
 # Instances (KEYWORD2)

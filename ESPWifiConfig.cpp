@@ -14,6 +14,18 @@ int ESPWifiConfig::initialize(void)
 	
 	ESP_read_settings();
 	//print_settings();
+	// User-defined settings that were never saved (or were wiped by
+	// resetAllSettings()) fall back to the default passed to addSetting().
+	for (uint8_t i = ESP_SETTINGS_BUILTIN; i < ESP_settings_size; i++)
+	{
+		if ((setting[i].user_value != nullptr) && (setting[i].user_value[0] == '\0') && (setting[i].default_value != nullptr))
+		{
+			strncpy(setting[i].user_value, setting[i].default_value, VALUE_USER_MAX_SIZE - 1);
+			setting[i].user_value[VALUE_USER_MAX_SIZE - 1] = '\0';
+		}
+	}
+	// The flash layout is fixed from here on: addSetting() is rejected.
+	settings_locked = true;
 	ESP_debug(sys_name);
 	WiFi.disconnect();
 	delay(100);
@@ -28,14 +40,14 @@ int ESPWifiConfig::initialize(void)
 	if(fix_ssid)
 	{
 		ESP_debug(F("WiFi mem overwrite"));
-		for(uint8_t i =0; i<VALUE_MAX_SIZE; i++)
-		{ setting[WIFI_SSID].value[i] = fallback_ssid[i]; if(fallback_ssid[i]=='\0') break; }
-		for(uint8_t i =0; i<VALUE_MAX_SIZE; i++)
-		{ setting[WIFI_PASS].value[i] = fallback_ssid_pass[i]; if(fallback_ssid_pass[i]=='\0') break; }
+		for(uint8_t i =0; i<setting[WIFI_SSID].max_size; i++)
+		{ setting_value(WIFI_SSID)[i] = fallback_ssid[i]; if(fallback_ssid[i]=='\0') break; }
+		for(uint8_t i =0; i<setting[WIFI_PASS].max_size; i++)
+		{ setting_value(WIFI_PASS)[i] = fallback_ssid_pass[i]; if(fallback_ssid_pass[i]=='\0') break; }
 		ESP_save_settings();
 	}
 	
-	if(((setting[WIFI_SSID].value[0] >= 32) && (setting[WIFI_SSID].value[0] <= 122)) || ((fallback_ssid[0] >= 32) && (fallback_ssid[0] <= 122) && (fallback_ssid_available)))	//ascii 0
+	if(((setting_value(WIFI_SSID)[0] >= 32) && (setting_value(WIFI_SSID)[0] <= 122)) || ((fallback_ssid[0] >= 32) && (fallback_ssid[0] <= 122) && (fallback_ssid_available)))	//ascii 0
 	{
 		ESP_mode = CLIENT_MODE;
 		wifi_connected = false;
@@ -44,14 +56,14 @@ int ESPWifiConfig::initialize(void)
 		WiFi.mode(WIFI_STA);
 		
 		
-		if ((setting[WIFI_SSID].value[0] >= 32) && (setting[WIFI_SSID].value[0] <= 126))
+		if ((setting_value(WIFI_SSID)[0] >= 32) && (setting_value(WIFI_SSID)[0] <= 126))
 		{
 			ESP_debug(F("Configured WiFi:"));
-			ESP_debug(setting[WIFI_SSID].value);
-			ESP_debug(setting[WIFI_PASS].value);
-			wifiMulti.addAP(setting[WIFI_SSID].value, setting[WIFI_PASS].value);
+			ESP_debug(setting_value(WIFI_SSID));
+			ESP_debug(setting_value(WIFI_PASS));
+			wifiMulti.addAP(setting_value(WIFI_SSID), setting_value(WIFI_PASS));
 			
-			if(!known_ssid_available) { ESP_debug(F("Not found:")); ESP_debug(setting[WIFI_SSID].value);}
+			if(!known_ssid_available) { ESP_debug(F("Not found:")); ESP_debug(setting_value(WIFI_SSID));}
 		}
 		
 		if((fallback_ssid[0] >= 32) && (fallback_ssid[0] <= 126) )
@@ -235,9 +247,9 @@ void ESPWifiConfig::wifiscan()
 			Serial.printf("%s", (WiFi.encryptionType(i) == ENC_TYPE_NONE) ? " " : "*");
 			Serial.printf("\n");
 			*/
-			if((setting[WIFI_SSID].value[0] >= 32) && (setting[WIFI_SSID].value[0] <= 126))	//ascii 0
+			if((setting_value(WIFI_SSID)[0] >= 32) && (setting_value(WIFI_SSID)[0] <= 126))	//ascii 0
 			{
-				if( WiFi.SSID(i).indexOf(setting[WIFI_SSID].value)>=0)
+				if( WiFi.SSID(i).indexOf(setting_value(WIFI_SSID))>=0)
 					known_ssid_available = true;
 			}
 			if((fallback_ssid[0] >= 32) && (fallback_ssid[0] <= 126) )
@@ -333,15 +345,15 @@ void ESPWifiConfig::handle_setup()
   }
   if (server.hasArg("WIFI_SSID_un") && (server.arg("WIFI_SSID_un").length() > 0))
   {
-	server.arg("WIFI_SSID_un").toCharArray(setting[WIFI_SSID].value, VALUE_MAX_SIZE);
+	server.arg("WIFI_SSID_un").toCharArray(setting_value(WIFI_SSID), setting[WIFI_SSID].max_size);
 	
     if (server.hasArg("WIFI_PASS"))
     {
-		server.arg("WIFI_PASS").toCharArray(setting[WIFI_PASS].value, VALUE_MAX_SIZE);
+		server.arg("WIFI_PASS").toCharArray(setting_value(WIFI_PASS), setting[WIFI_PASS].max_size);
     }
     else
     {
-      setting[WIFI_PASS].value[0] = '\0';
+      setting_value(WIFI_PASS)[0] = '\0';
     }
     delay(0);
     yield();
@@ -350,16 +362,16 @@ void ESPWifiConfig::handle_setup()
   }
   else if ((server.hasArg("WIFI_SSID_list")) && (server.arg("WIFI_SSID_list").length() > 0))
   {
-	server.arg("WIFI_SSID_list").toCharArray(setting[WIFI_SSID].value, VALUE_MAX_SIZE);
+	server.arg("WIFI_SSID_list").toCharArray(setting_value(WIFI_SSID), setting[WIFI_SSID].max_size);
 	
 	
     if (server.hasArg("WIFI_PASS"))
     {
-		server.arg("WIFI_PASS").toCharArray(setting[WIFI_PASS].value, VALUE_MAX_SIZE);
+		server.arg("WIFI_PASS").toCharArray(setting_value(WIFI_PASS), setting[WIFI_PASS].max_size);
     }
     else
     {
-      setting[WIFI_PASS].value[0] = 0;
+      setting_value(WIFI_PASS)[0] = 0;
     }
     delay(0);
     yield();
@@ -368,12 +380,26 @@ void ESPWifiConfig::handle_setup()
   }
 
 
-  for (int i = 2; i < ESP_settings_size; i++)
+  // Security tab (built-in WEB_USER / WEB_PASS)
+  for (int i = ESP_SETTINGS_BUILTIN - 2; i < ESP_SETTINGS_BUILTIN; i++)
   {
     if (server.hasArg(setting[i].name))
     {
-		server.arg(setting[i].name).toCharArray(setting[i].value, VALUE_MAX_SIZE);
+		server.arg(setting[i].name).toCharArray(setting_value(i), setting[i].max_size);
 		ESP_save_settings();
+    }
+  }
+
+  // User-defined settings (Custom tab): any registered slot that was POSTed
+  // gets saved, then the device reboots - exactly like the built-in entries.
+  for (int i = ESP_SETTINGS_BUILTIN; i < ESP_settings_size; i++)
+  {
+    if (server.hasArg(setting[i].name))
+    {
+		server.arg(setting[i].name).toCharArray(setting_value(i), setting[i].max_size);
+		ESP_save_settings();
+		ESP.restart();
+		return;
     }
   }
   delay(0);
@@ -426,7 +452,7 @@ void ESPWifiConfig::handle_login(void)
   }
   if (server.hasArg("USERNAME") && server.hasArg("PASSWORD"))
   {
-    if (server.arg("USERNAME") == setting[WEB_USER].value &&  server.arg("PASSWORD") == setting[WEB_PASS].value)
+    if (server.arg("USERNAME") == setting_value(WEB_USER) &&  server.arg("PASSWORD") == setting_value(WEB_PASS))
     {
       server.sendContent(F("HTTP/1.1 301 OK\r\nSet-Cookie: ESPSESSIONID=1\r\nLocation: /\r\nCache-Control: no-cache\r\n\r\n"));
       //Serial.printf("Log in Successful\n");
@@ -434,8 +460,8 @@ void ESPWifiConfig::handle_login(void)
     }
     error_msg += F("Wrong username/password! try again. ");
     ESP_debug("Log in Failed\n");
-	ESP_debug(setting[WEB_USER].value);
-	ESP_debug(setting[WEB_PASS].value);
+	ESP_debug(setting_value(WEB_USER));
+	ESP_debug(setting_value(WEB_PASS));
   }
   yield();
   print_login_page();
@@ -526,13 +552,13 @@ void ESPWifiConfig::handle_read_data(void)
 	yield();
   for (int i = 0; i < ESP_settings_size; i++)
   {
-    if (setting[i].value[0]!='\0')
+    if (setting_value(i)[0]!='\0')
     {
 		content += ", \"";
 		content += setting[i].name;
 		content += F("\" : \"");
 		
-		content += setting[i].value;
+		content += setting_value(i);
 		content += "\"";
     }
   }
@@ -563,6 +589,116 @@ void ESPWifiConfig::handle_cout(void)
   delay(0);
   yield();
 }
+
+// ======================================================================
+// User-extensible settings (v2.3.0)
+// ======================================================================
+
+// Value buffer of a setting: the fixed 64-byte array for the built-ins,
+// the heap buffer for user-defined slots.
+char *ESPWifiConfig::setting_value(int index)
+{
+	static char empty_value = '\0';
+	if ((index < 0) || (index >= ESP_settings_size))
+		return &empty_value;
+	if (setting[index].user_value != nullptr)
+		return setting[index].user_value;
+	return setting[index].value;
+}
+
+int ESPWifiConfig::addSetting(const char *name, const char *defaultValue)
+{
+	// addSetting() must not disturb the fixed EEPROM layout, so it is only
+	// allowed before initialize().
+	if (settings_locked)
+	{
+		ESP_debug(F("addSetting: call before initialize()"));
+		return -1;
+	}
+	if ((name == nullptr) || (name[0] == '\0'))
+	{
+		ESP_debug(F("addSetting: empty name"));
+		return -1;
+	}
+	if (strlen(name) >= NAME_MAX_SIZE)
+	{
+		ESP_debug(F("addSetting: name too long"));
+		return -1;
+	}
+	if (ESP_settings_size >= (ESP_SETTINGS_BUILTIN + ESP_MAX_USER_SETTINGS))
+	{
+		ESP_debug(F("addSetting: no free slot"));
+		return -1;
+	}
+	int index = ESP_settings_size;
+	for (int i = 0; i < index; i++)
+	{
+		if (strcmp(name, setting[i].name) == 0)
+		{
+			ESP_debug(F("addSetting: name already registered"));
+			return -1;
+		}
+	}
+	strncpy(setting[index].name, name, NAME_MAX_SIZE - 1);
+	setting[index].name[NAME_MAX_SIZE - 1] = '\0';
+	setting[index].max_size = VALUE_USER_MAX_SIZE;
+	setting[index].addr = (ESP_SETTINGS_BUILTIN * VALUE_MAX_SIZE) + ((index - ESP_SETTINGS_BUILTIN) * VALUE_USER_MAX_SIZE);
+	setting[index].user_value = (char *)malloc(VALUE_USER_MAX_SIZE);
+	if (setting[index].user_value == nullptr)
+	{
+		ESP_debug(F("addSetting: out of memory"));
+		return -1;
+	}
+	setting[index].user_value[0] = '\0';
+	setting[index].default_value = (char *)malloc(VALUE_USER_MAX_SIZE);
+	if (setting[index].default_value != nullptr)
+	{
+		setting[index].default_value[0] = '\0';
+		if (defaultValue != nullptr)
+		{
+			strncpy(setting[index].default_value, defaultValue, VALUE_USER_MAX_SIZE - 1);
+			setting[index].default_value[VALUE_USER_MAX_SIZE - 1] = '\0';
+		}
+		// Start with the default value in RAM (it is persisted on the first
+		// save and restored after a reset while the flash slot is empty).
+		strncpy(setting[index].user_value, setting[index].default_value, VALUE_USER_MAX_SIZE - 1);
+		setting[index].user_value[VALUE_USER_MAX_SIZE - 1] = '\0';
+	}
+	ESP_settings_size = index + 1;
+	return index;
+}
+
+String ESPWifiConfig::getSetting(const char *name)
+{
+	if (name == nullptr)
+		return String();
+	for (int i = 0; i < ESP_settings_size; i++)
+	{
+		if (strcmp(name, setting[i].name) == 0)
+		{
+			return String(setting_value(i));
+		}
+	}
+	return String();
+}
+
+String ESPWifiConfig::getSetting(int index)
+{
+	if ((index < 0) || (index >= ESP_settings_size))
+		return String();
+	return String(setting_value(index));
+}
+
+void ESPWifiConfig::saveAllSettings()
+{
+	ESP_save_settings();
+}
+
+void ESPWifiConfig::resetAllSettings()
+{
+	ESP_reset_settings();
+}
+// ======================================================================
 
 
 
@@ -640,7 +776,31 @@ void ESPWifiConfig::print_setup_page(void)
 {
   delay(0);
   yield();
-  server.send(200, F("text/html"), FPSTR(setup_page_file));
+  if (ESP_settings_size > ESP_SETTINGS_BUILTIN)
+  {
+    // User-defined settings registered: render the static page with the
+    // "Custom" tab placeholders replaced (one row per user setting).
+    String page = String(FPSTR(setup_page_file));
+    String tab_body = F("<div id=\"Custom\" class=\"tabcontent\"> <form action=\"\" method=\"POST\"> <table class=\"tableall\">");
+    for (int i = ESP_SETTINGS_BUILTIN; i < ESP_settings_size; i++)
+    {
+      tab_body += "<tr> <td class=\"tableleft\">";
+      tab_body += setting[i].name;
+      tab_body += "</td> <td class=\"tableright\"><input type=\"text\" name=\"";
+      tab_body += setting[i].name;
+      tab_body += "\" id=\"";
+      tab_body += setting[i].name;
+      tab_body += "\" maxlength=\"255\"><br></td> </tr>";
+    }
+    tab_body += F("<tr> <td class=\"tableleft\"></td> <td class=\"tableright\"><button type=\"submit\" class=\"b1\" value=\"Submit\">Save</button></td> </tr> </table> </form> </div>");
+    page.replace(CUSTOM_TAB_LINK_PLACEHOLDER, F("<li><a href=\"javascript:void(0)\" class=\"tablinks\" onclick=\"openTab(event, 'Custom')\">Custom</a></li>"));
+    page.replace(CUSTOM_TAB_BODY_PLACEHOLDER, tab_body);
+    server.send(200, F("text/html"), page);
+  }
+  else
+  {
+    server.send(200, F("text/html"), FPSTR(setup_page_file));
+  }
   delay(0);
   yield();
 }
@@ -713,7 +873,7 @@ void ESPWifiConfig::ESP_reset_settings()
   for (int i = 0; i < ESP_settings_size; i++)
   {
     uint8_t kx = 0;
-    for (unsigned int k = setting[i].addr; k < (VALUE_MAX_SIZE + setting[i].addr); k++)
+    for (unsigned int k = setting[i].addr; k < (setting[i].max_size + setting[i].addr); k++)
     {
 		
 		EEPROM.write(k, 0);
@@ -736,23 +896,26 @@ void ESPWifiConfig::ESP_read_settings()
 	//Serial.print("Read: ");
 	//Serial.print(setting[i].name);
 	
+	char *val = setting_value(i);
 	uint8_t first_char = EEPROM.read(setting[i].addr);
 	if( ((first_char>=32) && ( first_char<=126)) || (i==WIFI_SSID) || (i==WIFI_PASS))
 	{
 		//Serial.print("=");
-		uint8_t ix = 0;
-		for (uint16_t k = setting[i].addr; k < (VALUE_MAX_SIZE + setting[i].addr); k++)
+		uint16_t ix = 0;
+		for (uint16_t k = setting[i].addr; k < (setting[i].max_size + setting[i].addr); k++)
 		{
 		  char chr = (char)EEPROM.read(k);
 		  if((chr >= 32) && (chr <= 126))
 		  {
-			  setting[i].value[ix] = chr;
-			  //Serial.print(setting[i].value[ix]);
+			  if (ix < (setting[i].max_size - 1)) val[ix] = chr;
+			  //Serial.print(val[ix]);
 		  }
-		  else if (chr == '\0') { setting[i].value[ix] = chr; break; }
-		  else setting[i].value[ix] = '\0';
+		  else if (chr == '\0') { if (ix < (setting[i].max_size - 1)) val[ix] = chr; break; }
+		  else { if (ix < (setting[i].max_size - 1)) val[ix] = '\0'; }
+		  if (ix >= (setting[i].max_size - 1)) break;
 		  ix++;
 		}
+		if (ix < setting[i].max_size) val[ix] = '\0';
 	}
 	//else Serial.print(F(" N/A"));
 	//Serial.println(";");
@@ -773,13 +936,14 @@ void ESPWifiConfig::ESP_save_settings()
 	//Serial.print(setting[i].name);
 
 	//Serial.print("=");
+	char *val = setting_value(i);
 	int ee = setting[i].addr;
 	
-    for (uint8_t k = 0; k < VALUE_MAX_SIZE; k++)
+    for (unsigned int k = 0; k < setting[i].max_size; k++)
     {
-		//Serial.print(setting[i].value[k]);
-		EEPROM.write(ee, setting[i].value[k]);
-		if(setting[i].value[k]=='\0') break;
+		//Serial.print(val[k]);
+		EEPROM.write(ee, val[k]);
+		if(val[k]=='\0') break;
 		ee++;
     }
 	//Serial.println(";");
@@ -796,7 +960,7 @@ void ESPWifiConfig::print_settings()
   uint8_t ESP_settings_count = 0;
   for (uint8_t i = 0; i < ESP_settings_size; i++)
   {
-    Serial.printf(setting[i].name); Serial.printf("="); Serial.printf(setting[i].value); Serial.printf(";\n");
+    Serial.printf(setting[i].name); Serial.printf("="); Serial.printf(setting_value(i)); Serial.printf(";\n");
     ESP_settings_count++;
   }
   Serial.printf("EEPROM used:%d-%d\n", setting[0].addr, setting[ESP_settings_count-1].addr + setting[ESP_settings_count-1].max_size);

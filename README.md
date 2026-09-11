@@ -20,6 +20,40 @@ Default login: admin, pass_ESP
 - Use `WifiConfig.goWild()` to connect to any password-less WiFi in range. In the example, it's used as the last resort when the configured and fallback WiFis are not found. If there is still no WiFi connection then it will automatically Restart after an hour.
 
 
+### Custom / user-defined settings (v2.3.0+)
+
+Besides the built-in `WIFI_SSID`, `WIFI_PASS`, `WEB_USER` and `WEB_PASS` settings you can register your own (e.g. an API URL or key). They are stored in the same EEPROM region (user slots start at offset 256, 255 chars each, up to 14 slots), editable on the same setup page (the **Custom** tab) and usable in your sketch:
+
+```cpp
+#include <ESPWifiConfig.h>
+
+ESPWifiConfig WifiConfig("myESP", 80, -1, false, "", "", true);
+
+// Register a user setting BEFORE initialize().
+// Returns the slot index (use it with getSetting(int)), or -1 on failure.
+int MY_URL_SLOT = WifiConfig.addSetting("LOCALAI_URL", "http://192.168.1.5:8080/v1/");
+int MY_KEY_SLOT = WifiConfig.addSetting("LOCALAI_KEY", "sk1234567890");
+
+void setup()
+{
+  // initialize() reads the settings from EEPROM (and starts the AP if
+  // no network is configured - see the example above)
+  if (WifiConfig.initialize() == AP_MODE)
+  {
+    WifiConfig.Start_HTTP_Server(0);
+  }
+
+  String url = WifiConfig.getSetting(MY_URL_SLOT);   // or getSetting("LOCALAI_URL")
+  String key = WifiConfig.getSetting("LOCALAI_KEY");
+  // ... use url/key, e.g. to build an HTTP client
+}
+```
+
+- `addSetting(name, defaultValue)` must be called **before** `initialize()`. The `defaultValue` is used on first boot and after a reset while the flash slot is still empty.
+- The value is editable on the setup page (`http://<ip>:<port>`, **Custom** tab) and is saved + reboot like the built-in entries.
+- `saveAllSettings()` persists all settings, `resetAllSettings()` wipes all of them (built-in + custom) and falls back to defaults.
+- Devices that never call `addSetting()` keep the exact same flash layout as before (built-in slots at 0/64/128/192, 64 bytes each) - no migration needed.
+
 
 
 

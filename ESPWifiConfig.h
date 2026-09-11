@@ -35,7 +35,8 @@
 
 
 
-#define ESP_settings_size 4
+// Number of built-in settings (fixed, never changed).
+#define ESP_SETTINGS_BUILTIN 4
 #define EEPROM_SIZE 4096
 
 class ESPWifiConfig;
@@ -56,19 +57,39 @@ enum settingsIndex {
   WEB_PASS
 };
 
-#define NAME_MAX_SIZE 10
+// Setting names are RAM/PROGMEM only (never stored to flash), so enlarging
+// this does not change the flash layout of existing devices.
+#define NAME_MAX_SIZE 16
+// Built-in settings keep their historical 64-byte flash slots (backward compatible).
 #define VALUE_MAX_SIZE 64
+// User-defined settings (addSetting()) get a 256-byte flash slot: 255 chars + NUL.
+// First user slot starts at 4 * VALUE_MAX_SIZE, so at most
+// (EEPROM_SIZE - 4 * VALUE_MAX_SIZE) / VALUE_USER_MAX_SIZE = 14 user slots fit.
+#define VALUE_USER_MAX_SIZE 256
+#define ESP_MAX_USER_SETTINGS ((EEPROM_SIZE - (ESP_SETTINGS_BUILTIN * VALUE_MAX_SIZE)) / VALUE_USER_MAX_SIZE)
+
+// Placeholders inside the static setup page (webpages/define_vars.h):
+// replaced with the "Custom" tab when user settings are registered.
+#define CUSTOM_TAB_LINK_PLACEHOLDER "%%ESP_CUSTOM_TAB_LINK%%"
+#define CUSTOM_TAB_BODY_PLACEHOLDER "%%ESP_CUSTOM_TAB_BODY%%"
 
 class SettingsObject
 {
 	public:
-		const char name[NAME_MAX_SIZE];
+		char name[NAME_MAX_SIZE];
 		char value[VALUE_MAX_SIZE];
-		const unsigned char max_size;
-		const int addr;
+		// uint16_t: user slots are 256 bytes (unsigned char would wrap to 0)
+		uint16_t max_size;
+		int addr;
+		// User-defined settings (index >= ESP_SETTINGS_BUILTIN) use a
+		// heap-allocated buffer instead of the fixed 64-byte array, so the
+		// built-ins keep their exact historical size in RAM and flash.
+		char *user_value = nullptr;
+		// Initial value for user-defined settings: used as the fallback when
+		// the flash slot is empty (first boot, or after resetAllSettings()).
+		// Heap-allocated, only set for user slots (nullptr for the built-ins).
+		char *default_value = nullptr;
 };
-
-
 
 
 
@@ -82,6 +103,7 @@ class ESPWifiConfig
 	boolean fallback_ssid_available = false;
 	boolean known_ssid_available = false;
 	boolean show_debug = false;
+	boolean settings_locked = false;	// set by initialize(); addSetting() is rejected after that
 	
 	int reset_btn = -1;
 	int http_port = 80;
@@ -111,12 +133,40 @@ class ESPWifiConfig
 		int ESP_mode = 0;
 		boolean isHTTPserverRunning = false;
 		unsigned long last_conn_to_http = 0;
-		SettingsObject setting[ESP_settings_size] = {{"WIFI_SSID", "", VALUE_MAX_SIZE, 0}, 
-													  {"WIFI_PASS", "", VALUE_MAX_SIZE, VALUE_MAX_SIZE},
-													  {"WEB_USER", "admin", VALUE_MAX_SIZE, VALUE_MAX_SIZE*2},
-													  {"WEB_PASS", "pass_ESP", VALUE_MAX_SIZE, VALUE_MAX_SIZE*3}};
-		
+		// Total number of settings = built-ins + user-defined (addSetting()).
+		// All read/save/reset/web loops iterate over this.
+		uint8_t ESP_settings_size = ESP_SETTINGS_BUILTIN;
+		SettingsObject setting[ESP_SETTINGS_BUILTIN + ESP_MAX_USER_SETTINGS] = {{"WIFI_SSID", "", VALUE_MAX_SIZE, 0}, 
+																			{"WIFI_PASS", "", VALUE_MAX_SIZE, VALUE_MAX_SIZE},
+																			{"WEB_USER", "admin", VALUE_MAX_SIZE, VALUE_MAX_SIZE*2}, 
+																			{"WEB_PASS", "pass_ESP", VALUE_MAX_SIZE, VALUE_MAX_SIZE*3}};
 
+		// ------------------------------------------------------------------
+		// User-extensible settings (v2.3.0)
+		// ------------------------------------------------------------------
+		// Register an additional, user-defined setting.
+		// Must be called BEFORE initialize(). The slot is appended after the
+		// built-in ones (flash offset 256, then +256 each) and is 255 chars
+		// long. Returns the slot index (usable with getSetting(int)) or -1
+		// if the name is invalid, a slot with the same name already exists,
+		// no free slot is left, or initialize() was already called.
+		int addSetting(const char *name, const char *defaultValue = "");
+		
+		// Read any setting (built-in or user-defined) by name or index.
+		// Returns an empty String if the name/index is unknown.
+		String getSetting(const char *name);
+		String getSetting(int index);
+		
+		// Persist all settings (built-in + user-defined) to flash.
+		void saveAllSettings();
+		
+		// Wipe all settings (built-in + user-defined) and fall back to defaults.
+		void resetAllSettings();
+		// ------------------------------------------------------------------
+		
+		// Value buffer of a setting (fixed array for built-ins, heap for user slots).
+		char *setting_value(int index);
+		
 		boolean is_reset_pressed(int);
 		void print_settings(void);
 		void ESP_reset_settings(void);
