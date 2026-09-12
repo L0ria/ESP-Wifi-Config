@@ -46,8 +46,8 @@
 			</tr>
 			</table>
 		</div>
+		<form action="" method="POST" id="settingsForm" onsubmit="return validateSettings()">
 		<div id="Wifi" class="tabcontent">
-				<form action="" method="POST">
 					<table class="tableall">
 					<tr>
 					<td class="tableleft">SSID</td>
@@ -67,47 +67,8 @@
 					<td class="tableright"><button type="submit" class="b1" value="Submit">Save</button></td>
 					</tr>
 					</table>
-				</form>
-		</div>
-		<div id="Seatalk" class="tabcontent">
-		  <form action="" method="POST">
-					<table class="tableall">
-					<tr>
-						<td class="tableleft">
-							Access Page Username:
-						</td>
-						<td class="tableright">
-							<input type="text" name="WEB_USER" id="WEB_USER" pattern="^[a-zA-Z0-9]+$" maxlength="9" required>
-						</td>
-					</tr>
-					<tr>
-						<td class="tableleft">
-							Access Page Password:
-						</td>
-						<td class="tableright">
-							<input type="password" name="WEB_PASS" id="WEB_PASS" pattern="^[^; ]+$" maxlength="9" required>
-						</td>
-					</tr>
-					<tr>
-						<td class="tableleft">
-							Retype Password:
-						</td>
-						<td class="tableright">
-							<input type="password" name="WEB_2PASS" id="WEB_2PASS" pattern="^[^; ]+$" maxlength="9" required>
-						</td>
-					</tr>
-					<tr>
-						<td class="tableleft">
-						</td>
-						<td class="tableright">
-							<button type="submit" class="b1" value="Submit">Save</button>
-						</td>
-					</tr>
-					</table>
-			</form>
 		</div>
 		<div id="Security" class="tabcontent">
-		  <form action="" method="POST">
 					<table class="tableall">
 					<tr>
 						<td class="tableleft">
@@ -141,9 +102,9 @@
 						</td>
 					</tr>
 					</table>
-			</form>
 		</div>
 		%%ESP_CUSTOM_TAB_BODY%%
+		</form>
 		<div id="Console" class="tabcontent">
 					<table class="tableall">
 					<tr>
@@ -310,6 +271,29 @@
 			readCout();
 			document.getElementById("c_in").value = "";
 		  }
+		}
+		</script>
+		<script>
+		// The whole settings page is ONE form (id=settingsForm) so a Save
+		// click on any tab submits the values of ALL tabs (Wifi + Security +
+		// Custom) in a single request. Validate before submitting:
+		function validateSettings()
+		{
+			var pass = document.getElementById("WEB_PASS");
+			var pass2 = document.getElementById("WEB_2PASS");
+			if (pass && pass2 && pass.value != pass2.value)
+			{
+				alert("Security: passwords don't match");
+				return false;
+			}
+			var ssid_list = document.getElementById("WIFI_SSID_list");
+			var ssid_un = document.getElementById("WIFI_SSID_un");
+			if (ssid_list && ssid_un && ssid_list.value == "" && ssid_un.value == "")
+			{
+				alert("Wifi: please select or enter a WiFi SSID");
+				return false;
+			}
+			return true;
 		}
 		</script>
 	</body>
