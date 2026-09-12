@@ -343,10 +343,29 @@ void ESPWifiConfig::handle_setup()
     server.sendContent(F("HTTP/1.1 301 OK\r\nLocation: ./login\r\nCache-Control: no-cache\r\n\r\n"));
     return;
   }
+
+  // The setup page is ONE form containing every settings field of every tab
+  // (Wifi + Security + Custom), so a Save click on any tab POSTs all values
+  // in a single request. Apply everything, persist it all, and only then
+  // reboot - so settings entered on different tabs are never lost.
+  bool any_setting_posted = false;
+  bool wifi_saved = false;
+
+  // Wifi tab: manual SSID (WIFI_SSID_un) or scanned SSID (WIFI_SSID_list).
   if (server.hasArg("WIFI_SSID_un") && (server.arg("WIFI_SSID_un").length() > 0))
   {
 	server.arg("WIFI_SSID_un").toCharArray(setting_value(WIFI_SSID), setting[WIFI_SSID].max_size);
-	
+    wifi_saved = true;
+  }
+  else if ((server.hasArg("WIFI_SSID_list")) && (server.arg("WIFI_SSID_list").length() > 0))
+  {
+	server.arg("WIFI_SSID_list").toCharArray(setting_value(WIFI_SSID), setting[WIFI_SSID].max_size);
+    wifi_saved = true;
+  }
+
+  // A WiFi SSID was submitted: store the password (empty = open network).
+  if (wifi_saved)
+  {
     if (server.hasArg("WIFI_PASS"))
     {
 		server.arg("WIFI_PASS").toCharArray(setting_value(WIFI_PASS), setting[WIFI_PASS].max_size);
@@ -355,53 +374,28 @@ void ESPWifiConfig::handle_setup()
     {
       setting_value(WIFI_PASS)[0] = '\0';
     }
-    delay(0);
-    yield();
-    ESP_save_settings();
-	ESP.restart();
-  }
-  else if ((server.hasArg("WIFI_SSID_list")) && (server.arg("WIFI_SSID_list").length() > 0))
-  {
-	server.arg("WIFI_SSID_list").toCharArray(setting_value(WIFI_SSID), setting[WIFI_SSID].max_size);
-	
-	
-    if (server.hasArg("WIFI_PASS"))
-    {
-		server.arg("WIFI_PASS").toCharArray(setting_value(WIFI_PASS), setting[WIFI_PASS].max_size);
-    }
-    else
-    {
-      setting_value(WIFI_PASS)[0] = 0;
-    }
-    delay(0);
-    yield();
-    ESP_save_settings();
-	ESP.restart();
   }
 
-
-  // Security tab (built-in WEB_USER / WEB_PASS)
-  for (int i = ESP_SETTINGS_BUILTIN - 2; i < ESP_SETTINGS_BUILTIN; i++)
+  // Security tab (built-in WEB_USER / WEB_PASS) + user-defined settings
+  // (Custom tab): any registered slot that was POSTed gets applied.
+  for (int i = ESP_SETTINGS_BUILTIN - 2; i < ESP_settings_size; i++)
   {
     if (server.hasArg(setting[i].name))
     {
 		server.arg(setting[i].name).toCharArray(setting_value(i), setting[i].max_size);
-		ESP_save_settings();
+		any_setting_posted = true;
     }
   }
 
-  // User-defined settings (Custom tab): any registered slot that was POSTed
-  // gets saved, then the device reboots - exactly like the built-in entries.
-  for (int i = ESP_SETTINGS_BUILTIN; i < ESP_settings_size; i++)
+  if (any_setting_posted || wifi_saved)
   {
-    if (server.hasArg(setting[i].name))
-    {
-		server.arg(setting[i].name).toCharArray(setting_value(i), setting[i].max_size);
-		ESP_save_settings();
-		ESP.restart();
-		return;
-    }
+    // Persist ALL settings (built-in + user-defined) from RAM in one go.
+    ESP_save_settings();
+    ESP_debug(F("Settings saved - restarting"));
+	ESP.restart();
+    return;
   }
+
   delay(0);
   yield();
 
@@ -781,7 +775,7 @@ void ESPWifiConfig::print_setup_page(void)
     // User-defined settings registered: render the static page with the
     // "Custom" tab placeholders replaced (one row per user setting).
     String page = String(FPSTR(setup_page_file));
-    String tab_body = F("<div id=\"Custom\" class=\"tabcontent\"> <form action=\"\" method=\"POST\"> <table class=\"tableall\">");
+    String tab_body = F("<div id=\"Custom\" class=\"tabcontent\"> <table class=\"tableall\">");
     for (int i = ESP_SETTINGS_BUILTIN; i < ESP_settings_size; i++)
     {
       tab_body += "<tr> <td class=\"tableleft\">";
@@ -792,7 +786,7 @@ void ESPWifiConfig::print_setup_page(void)
       tab_body += setting[i].name;
       tab_body += "\" maxlength=\"255\"><br></td> </tr>";
     }
-    tab_body += F("<tr> <td class=\"tableleft\"></td> <td class=\"tableright\"><button type=\"submit\" class=\"b1\" value=\"Submit\">Save</button></td> </tr> </table> </form> </div>");
+    tab_body += F("<tr> <td class=\"tableleft\"></td> <td class=\"tableright\"><button type=\"submit\" class=\"b1\" value=\"Submit\">Save</button></td> </tr> </table> </div>");
     page.replace(CUSTOM_TAB_LINK_PLACEHOLDER, F("<li><a href=\"javascript:void(0)\" class=\"tablinks\" onclick=\"openTab(event, 'Custom')\">Custom</a></li>"));
     page.replace(CUSTOM_TAB_BODY_PLACEHOLDER, tab_body);
     server.send(200, F("text/html"), page);
