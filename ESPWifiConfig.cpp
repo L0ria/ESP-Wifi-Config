@@ -393,6 +393,16 @@ void ESPWifiConfig::handle_setup()
     // Persist ALL settings (built-in + user-defined) from RAM in one go.
     ESP_save_settings();
     ESP_debug(F("Settings saved - use the Reboot button to apply"));
+    // The Save button submits the page's own form (action="" => this
+    // /setup URL), so the browser expects a document as the response.
+    // Re-send the setup page (now pre-filled with the saved values)
+    // instead of returning an empty body, which the browser shows as
+    // "ERR_EMPTY_RESPONSE / This page isn't working".
+    delay(0);
+    yield();
+    print_setup_page();
+    delay(0);
+    yield();
     return;
   }
 
