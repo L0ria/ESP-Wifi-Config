@@ -274,6 +274,7 @@ void ESPWifiConfig::Start_HTTP_Server(unsigned long client_mode_active_time_x)
 	server.on("/readSettings", std::bind(&ESPWifiConfig::handle_read_data, this));
 	server.on("/readSSID", std::bind(&ESPWifiConfig::handle_ssid_list, this));
 	server.on("/readCout", std::bind(&ESPWifiConfig::handle_cout, this));
+	server.on("/reboot", std::bind(&ESPWifiConfig::handle_reboot, this));
 
 
 	server.onNotFound(std::bind(&ESPWifiConfig::handleNotFound, this));
@@ -391,8 +392,7 @@ void ESPWifiConfig::handle_setup()
   {
     // Persist ALL settings (built-in + user-defined) from RAM in one go.
     ESP_save_settings();
-    ESP_debug(F("Settings saved - restarting"));
-	ESP.restart();
+    ESP_debug(F("Settings saved - use the Reboot button to apply"));
     return;
   }
 
@@ -582,6 +582,24 @@ void ESPWifiConfig::handle_cout(void)
   
   delay(0);
   yield();
+}
+
+void ESPWifiConfig::handle_reboot(void)
+{
+  delay(0);
+  yield();
+  if (!is_authentified())
+  {
+    server.sendContent(F("HTTP/1.1 301 OK\r\nLocation: ./login\r\nCache-Control: no-cache\r\n\r\n"));
+    return;
+  }
+
+  // Explicit Reboot button: apply the saved settings and restart.
+  // (Save no longer reboots automatically - the user clicks Reboot
+  // once all tabs are configured.)
+  ESP_debug(F("Reboot requested from setup page"));
+  delay(100);
+  ESP.restart();
 }
 
 // ======================================================================
