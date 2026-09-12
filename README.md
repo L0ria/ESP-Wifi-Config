@@ -10,7 +10,7 @@
 ## Usage
 
 - When WiFi settings are not configured and the fallback WiFi is not in range then ESP will start in AP_Mode (Access Point). Connect your PC/Phone's WiFi to the AP named ESP_XXXXX, then configure the WiFi settings
-- Browse to URL `192.168.1.1` to configure the WiFi settings. The whole setup page is ONE form, so a Save click on **any** tab (Wifi / Security / Custom) submits the values of **all** tabs in a single request, stores them all, and reboots once - settings entered on different tabs are never lost. It will then connect to the configured wifi
+- Browse to URL `192.168.1.1` to configure the WiFi settings. The whole setup page is ONE form, so a Save click on **any** tab (Wifi / Security / Custom) submits the values of **all** tabs in a single request, stores them all (no automatic reboot) - settings entered on different tabs are never lost. When all tabs are configured, click the Reboot button in the title bar to apply the settings and restart. It will then connect to the configured wifi
 Default login: admin, pass_ESP
 
 - To reset the already known configurations, hold `Config_reset_btn` to `LOW` for 5 to 10 seconds when already in `CLIENT_MODE`. Add your own button mechanism on `Config_reset_btn` pin. It's not the power reset button. Or use  `WifiConfig.ESP_reset_settings()` to reset config memory, then `initialize()` again.
@@ -49,7 +49,7 @@ void setup()
 ```
 
 - `addSetting(name, defaultValue)` must be called **before** `initialize()`. The `defaultValue` is used on first boot and after a reset while the flash slot is still empty.
-- The value is editable on the setup page (`http://<ip>:<port>`, **Custom** tab). Saving on any tab stores **all** tabs' values in one request and reboots once (see the Usage note above).
+- The value is editable on the setup page (`http://<ip>:<port>`, **Custom** tab). Saving on any tab stores **all** tabs' values in one request (no automatic reboot); click the Reboot button in the title bar to apply and restart (see the Usage note above).
 - `saveAllSettings()` persists all settings, `resetAllSettings()` wipes all of them (built-in + custom) and falls back to defaults.
 - Devices that never call `addSetting()` keep the exact same flash layout as before (built-in slots at 0/64/128/192, 64 bytes each) - no migration needed.
 

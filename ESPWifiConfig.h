@@ -217,5 +217,6 @@ class ESPWifiConfig
 		void handle_ssid_list(void);
 		void handle_read_data(void);
 		void handle_cout(void);
+		void handle_reboot(void);
 		
 };
